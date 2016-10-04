@@ -13,34 +13,18 @@ import struct
 done = False
 lock = threading.Lock()
 pool = []
-camWidth = 96
-camHeight = 128
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
 # - - - - - - - - - - - - - - - - - -
 class ImageProcessor(threading.Thread):
-    def __init__(self, w, h, spcr):
+    def __init__(self):
         super(ImageProcessor, self).__init__()
-        self.width = w
-        self.height = h
-        self.spacer = spcr
-        self.streamOffset = 1
-        # stremOffset = 0 --> use red light
-        # stremOffset = 1--> use green light
-        # stremOffset = 2 --> use blue light
-        self.makeGrid()
-        print("width: ", self.width)
-        print("height: ", self.height)
-        print("spacer: ", self.spacer)
         self.stream = io.BytesIO()
         self.event = threading.Event()
         self.terminated = False
         self.start()
 
-    # - - - - - - - - - - - - - - - - - -
-    # - - - - - - Run Method  - - - - - - 
-    # - - - - - - - - - - - - - - - - - -
     def run(self):
         # This method runs in a separate thread
         global done
@@ -50,16 +34,27 @@ class ImageProcessor(threading.Thread):
             if self.event.wait(1):
                 try:
                     self.stream.seek(0)
-                    print(struct.unpack('B', self.stream.read(1))[0])
-
-                    self.gridScan()
+                    # Read the image and do some processing on it
+                    img = Image.open(self.stream)
+                    
+                    # - - - - - - - - - - - - - - - - - -
+                    # - - - - -  experimental - - - - - - 
+                    # - - - - - - - - - - - - - - - - - -
+                    #self.stream.seek(1)
+                    #print(struct.unpack('B', self.stream.read(1))[0])
+                    
                     
                     counterThing += 1
                     if counterThing < 10:
                         print ("taking an image")
                     else:
-                        #img.save("out.bmp")
+                        img.save("out.bmp")
                         done = True
+                    #...
+                    #...
+                    # Set done to True if you want the script to terminate
+                    # at some point
+                    #done=True
                 finally:
                     # Reset the stream and event
                     self.stream.seek(0)
@@ -68,46 +63,6 @@ class ImageProcessor(threading.Thread):
                     # Return ourselves to the pool
                     with lock:
                         pool.append(self)
-
-    # - - - - - - - - - - - - - - - - - -
-    # - - - - - Makegrid Method - - - - - 
-    # - - - - - - - - - - - - - - - - - -
-    def makeGrid(self):
-        # In this method we prepare a grid by using:
-        # - width
-        # - height
-        # - spacer
-        # The grid is made of values which can directly be used on the stream
-        self.grid = []
-        self.indexMapX = []
-        self.indexMapY = []
-        # rgb-Stream: 0,0,0 ,0,0,0, 0,0,0, ... 
-        # The stream starts in the top left corner of the image. 
-        _x = 0
-        _y = 0
-        while(_y + self.spacer < self.height):
-            while(_x < self.width):
-                self.grid.append(self.streamOffset + 3*(_y*self.width + _x))
-                self.indexMapX.append(_x)
-                self.indexMapY.append(_y)
-                _x += self.spacer
-            _x = 0
-            _y += self.spacer
-        print("grid length: ", len(self.grid))
-        print("second grid entry :", self.grid[1])
-
-    # - - - - - - - - - - - - - - - - - -
-    # - - - - - GridScan Method - - - - - 
-    # - - - - - - - - - - - - - - - - - -
-    def gridScan(self):
-        for index, entry in enumerate(self.grid):
-            self.stream.seek(entry)
-            if struct.unpack('B', self.stream.read(1))[0] > 50:
-                print("found something at:")
-                print("x: ", self.indexMapX[index])
-                print("y: ", self.indexMapY[index])
-
-
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
@@ -130,8 +85,8 @@ def streams():
 # - - - - - Main Program  - - - - - - 
 # - - - - - - - - - - - - - - - - - -
 with picamera.PiCamera() as camera:
-    pool = [ImageProcessor(camWidth, camHeight, 20) for i in range(4)]
-    camera.resolution = (camWidth, camHeight)
+    pool = [ImageProcessor() for i in range(4)]
+    camera.resolution = (96, 128)
     camera.framerate = 90
     time.sleep(2)
     # Now fix the values
@@ -141,7 +96,8 @@ with picamera.PiCamera() as camera:
     g = camera.awb_gains
     camera.awb_mode = 'off'
     camera.awb_gains = g
-    camera.capture_sequence(streams(), 'rgb', use_video_port=True)
+    camera.capture_sequence(streams(), use_video_port=True)
+    #camera.capture_sequence(streams(), 'yuv', use_video_port=True)
 
 # Shut down the processors in an orderly fashion
 while pool:
