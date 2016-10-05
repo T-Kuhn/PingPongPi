@@ -26,6 +26,7 @@ class ImageProcessor(threading.Thread):
         self.height = h
         self.spacer = spcr
         self.streamOffset = 1
+        self.threshold = 55
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
@@ -50,8 +51,6 @@ class ImageProcessor(threading.Thread):
             if self.event.wait(1):
                 try:
                     self.stream.seek(0)
-                    print(struct.unpack('B', self.stream.read(1))[0])
-
                     self.gridScan()
                     
                     counterThing += 1
@@ -85,7 +84,7 @@ class ImageProcessor(threading.Thread):
         # The stream starts in the top left corner of the image. 
         _x = 0
         _y = 0
-        while(_y + self.spacer < self.height):
+        while(_y + 2*self.spacer < self.height):
             while(_x < self.width):
                 self.grid.append(self.streamOffset + 3*(_y*self.width + _x))
                 self.indexMapX.append(_x)
@@ -102,12 +101,32 @@ class ImageProcessor(threading.Thread):
     def gridScan(self):
         for index, entry in enumerate(self.grid):
             self.stream.seek(entry)
-            if struct.unpack('B', self.stream.read(1))[0] > 50:
+            if struct.unpack('B', self.stream.read(1))[0] > self.threshold:
                 print("found something at:")
                 print("x: ", self.indexMapX[index])
                 print("y: ", self.indexMapY[index])
+                print("start closer examination")
+                self.centeringHorizontal(entry)
+
+    # - - - - - - - - - - - - - - - - - -
+    # - - Centering Horizontal Method - - 
+    # - - - - - - - - - - - - - - - - - -
+    def centeringHorizontal(self, streamIndex):
+        self.stream.seek(streamIndex)
+        # see how far we can go to the left
+        # -> searching into the minus
+
+        # see how far we can go to the right
+        # -> searching into the plus
+
+        # calculate the new center
+        # centerCorrection = (left + right)/2 
 
 
+    # - - - - - - - - - - - - - - - - - -
+    # - - Centering Vertical Method - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def centeringVertical(self):
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
