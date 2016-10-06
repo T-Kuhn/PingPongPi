@@ -24,8 +24,12 @@ class ImageProcessor(threading.Thread):
         super(ImageProcessor, self).__init__()
         self.width = w
         self.height = h
+        self.objPosX = 0
+        self.objPosY = 0
+        self.objPosZ = 0
         self.spacer = spcr
         self.streamOffset = 1
+        self.centerStreamIndex = 0
         self.threshold = 55
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
@@ -57,7 +61,6 @@ class ImageProcessor(threading.Thread):
                     if counterThing < 10:
                         print ("taking an image")
                     else:
-                        #img.save("out.bmp")
                         done = True
                 finally:
                     # Reset the stream and event
@@ -102,31 +105,70 @@ class ImageProcessor(threading.Thread):
         for index, entry in enumerate(self.grid):
             self.stream.seek(entry)
             if struct.unpack('B', self.stream.read(1))[0] > self.threshold:
+                self.objPosX = self.indexMapX[index]
+                self.objPosY = self.indexMapY[index]
+                self.centerStreamIndex = entry
+                # print("x: ", self.objPosX)
+                # print("y: ", self.objPosY)
+                # print("start closer examination")
+                self.cenHori()
+                self.cenVeri()
+                self.cenHori()
                 print("found something at:")
-                print("x: ", self.indexMapX[index])
-                print("y: ", self.indexMapY[index])
-                print("start closer examination")
-                self.centeringHorizontal(entry)
+                print("x: ", self.objPosX)
+                print("y: ", self.objPosY)
+                print("z: ", self.objPosZ)
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
     # - - - - - - - - - - - - - - - - - -
-    def centeringHorizontal(self, streamIndex):
-        self.stream.seek(streamIndex)
+    def cenHori(self):
+        stepsLeft = 0
+        stepsRight = 0
         # see how far we can go to the left
-        # -> searching into the minus
-
+        self.stream.seek(self.centerStreamIndex)
+        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            stepsLeft -= 1 
+            self.stream.seek(self.centerStreamIndex + stepsLeft*3)
+        # print("stepsLeft: ", stepsLeft)
         # see how far we can go to the right
-        # -> searching into the plus
-
+        self.stream.seek(self.centerStreamIndex)
+        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            stepsRight += 1 
+            self.stream.seek(self.centerStreamIndex + stepsRight*3)
+        # print("stepsRight: ", stepsRight)
         # calculate the new center
-        # centerCorrection = (left + right)/2 
-
+        centerCor = round((stepsLeft + stepsRight)/2) 
+        self.objPosX += centerCor
+        self.centerStreamIndex += centerCor*3
+        # print("new x: ", self.objPosX)
+        
+        # calculate Z axis:
+        self.objPosZ = stepsRight - stepsLeft
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Vertical Method - - - 
     # - - - - - - - - - - - - - - - - - -
-    def centeringVertical(self):
+    def cenVeri(self):
+        stepsUp = 0
+        stepsDown = 0
+        # see how far we can go Up 
+        self.stream.seek(self.centerStreamIndex)
+        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            stepsUp -= 1 
+            self.stream.seek(self.centerStreamIndex + stepsUp*3*self.width)
+        # print("stepsUp: ", stepsUp)
+        # see how far we can go Down 
+        self.stream.seek(self.centerStreamIndex)
+        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            stepsDown += 1 
+            self.stream.seek(self.centerStreamIndex + stepsDown*3*self.width)
+        # print("stepsDown: ", stepsDown)
+        # calculate the new center
+        centerCor = round((stepsUp + stepsDown)/2) 
+        self.objPosY += centerCor
+        self.centerStreamIndex += centerCor*3*self.width
+        # print("new y: ", self.objPosY)
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
