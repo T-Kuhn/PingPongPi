@@ -191,7 +191,7 @@ def streams():
 # - - - - - Main Program  - - - - - - 
 # - - - - - - - - - - - - - - - - - -
 with picamera.PiCamera() as camera:
-    pool = [ImageProcessor(camWidth, camHeight, 20) for i in range(4)]
+    pool = [ImageProcessor(camWidth, camHeight, 15) for i in range(4)]
     camera.resolution = (camWidth, camHeight)
     camera.framerate = 90
     time.sleep(2)
