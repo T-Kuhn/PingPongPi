@@ -6,6 +6,7 @@ import picamera.array
 from PIL import Image
 import numpy as np
 import struct
+import serial
 
 # - - - - - - - - - - - - - - - - - -
 # Create a pool of image processors
@@ -30,7 +31,7 @@ class ImageProcessor(threading.Thread):
         self.spacer = spcr
         self.streamOffset = 1
         self.centerStreamIndex = 0
-        self.threshold = 55
+        self.threshold = 75
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
@@ -49,19 +50,12 @@ class ImageProcessor(threading.Thread):
     def run(self):
         # This method runs in a separate thread
         global done
-        counterThing = 0
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
                 try:
                     self.stream.seek(0)
                     self.gridScan()
-                    
-                    counterThing += 1
-                    if counterThing < 10:
-                        print ("taking an image")
-                    else:
-                        done = True
                 finally:
                     # Reset the stream and event
                     self.stream.seek(0)
@@ -118,6 +112,7 @@ class ImageProcessor(threading.Thread):
                 print("x: ", self.objPosX)
                 print("y: ", self.objPosY)
                 print("z: ", self.objPosZ)
+                pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
@@ -125,26 +120,29 @@ class ImageProcessor(threading.Thread):
     def cenHori(self):
         stepsLeft = 0
         stepsRight = 0
-        # see how far we can go to the left
-        self.stream.seek(self.centerStreamIndex)
-        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
-            stepsLeft -= 1 
-            self.stream.seek(self.centerStreamIndex + stepsLeft*3)
-        # print("stepsLeft: ", stepsLeft)
-        # see how far we can go to the right
-        self.stream.seek(self.centerStreamIndex)
-        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
-            stepsRight += 1 
-            self.stream.seek(self.centerStreamIndex + stepsRight*3)
-        # print("stepsRight: ", stepsRight)
-        # calculate the new center
-        centerCor = round((stepsLeft + stepsRight)/2) 
-        self.objPosX += centerCor
-        self.centerStreamIndex += centerCor*3
-        # print("new x: ", self.objPosX)
-        
-        # calculate Z axis:
-        self.objPosZ = stepsRight - stepsLeft
+        try:
+            # see how far we can go to the left
+            self.stream.seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+                stepsLeft -= 1 
+                self.stream.seek(self.centerStreamIndex + stepsLeft*3)
+            # print("stepsLeft: ", stepsLeft)
+            # see how far we can go to the right
+            self.stream.seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+                stepsRight += 1 
+                self.stream.seek(self.centerStreamIndex + stepsRight*3)
+            # print("stepsRight: ", stepsRight)
+            # calculate the new center
+            centerCor = round((stepsLeft + stepsRight)/2) 
+            self.objPosX += centerCor
+            self.centerStreamIndex += centerCor*3
+            # print("new x: ", self.objPosX)
+            
+            # calculate Z axis:
+            self.objPosZ = stepsRight - stepsLeft
+        except:
+            pass
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Vertical Method - - - 
@@ -152,44 +150,94 @@ class ImageProcessor(threading.Thread):
     def cenVeri(self):
         stepsUp = 0
         stepsDown = 0
-        # see how far we can go Up 
-        self.stream.seek(self.centerStreamIndex)
-        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
-            stepsUp -= 1 
-            self.stream.seek(self.centerStreamIndex + stepsUp*3*self.width)
-        # print("stepsUp: ", stepsUp)
-        # see how far we can go Down 
-        self.stream.seek(self.centerStreamIndex)
-        while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
-            stepsDown += 1 
-            self.stream.seek(self.centerStreamIndex + stepsDown*3*self.width)
-        # print("stepsDown: ", stepsDown)
-        # calculate the new center
-        centerCor = round((stepsUp + stepsDown)/2) 
-        self.objPosY += centerCor
-        self.centerStreamIndex += centerCor*3*self.width
-        # print("new y: ", self.objPosY)
+        try:
+            # see how far we can go Up 
+            self.stream.seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+                stepsUp -= 1 
+                self.stream.seek(self.centerStreamIndex + stepsUp*3*self.width)
+            # print("stepsUp: ", stepsUp)
+            # see how far we can go Down 
+            self.stream.seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+                stepsDown += 1 
+                self.stream.seek(self.centerStreamIndex + stepsDown*3*self.width)
+            # print("stepsDown: ", stepsDown)
+            # calculate the new center
+            centerCor = round((stepsUp + stepsDown)/2) 
+            self.objPosY += centerCor
+            self.centerStreamIndex += centerCor*3*self.width
+            # print("new y: ", self.objPosY)
+        except:
+            pass
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
 # - - - - - - - - - - - - - - - - - -
 def streams():
+    global done
     while not done:
-        with lock:
-            if pool:
-                processor = pool.pop()
+        try:
+            with lock:
+                if pool:
+                    processor = pool.pop()
+                else:
+                    processor = None
+            if processor:
+                yield processor.stream
+                processor.event.set()
             else:
-                processor = None
-        if processor:
-            yield processor.stream
-            processor.event.set()
+                # When the pool is starved, wait a while for it to refill
+                time.sleep(0.02)
+        except KeyboardInterrupt:
+            print ("Ctrl-c pressed ...")
+            done = True
+
+# - - - - - - - - - - - - - - - - - -
+# - - - - - PIDController - - - - - - 
+# - - - - - - - - - - - - - - - - - -
+class PIDController():
+    def __init__(self):
+        self.port = serial.Serial("/dev/ttyAMA0", baudrate=115200, timeout=3.0)
+        self.oldcoords = [0,0,0] 
+        self.movingDown = False
+        self.waitFlag = False
+        self.waitCounter = 0
+
+    # - - - - - - - - - - - - - - - - - -
+    # - - - - - - - Update  - - - - - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def update(self, x, y, z):
+        if self.oldcoords[1] < y:
+            self.movingDown = True
         else:
-            # When the pool is starved, wait a while for it to refill
-            time.sleep(0.02)
+            self.movingDown = False
+
+        if self.waitFlag:
+            self.waitCounter += 1
+        if self.waitCounter >= 30:
+            self.waitFlag = False
+            self.waitCounter = 0
+
+        if y > 40 and not self.waitFlag:
+            self.waitFlag = True
+            self.sendData("data")
+
+        self.oldcoords = [x, y, z]
+    # - - - - - - - - - - - - - - - - - -
+    # - - - - - - Send Data - - - - - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def sendData(self, data):
+        print("will attempt to send some data")
+        #self.port.flushInput()
+        self.port.write(b"\r\nG17 G20 G90 G94 G54 G0\r\nX1.1 Y1.1 Z1.1\r\nX0 Y0 Z0\r\n")
+
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - - Main Program  - - - - - - 
 # - - - - - - - - - - - - - - - - - -
+pidCon = PIDController()
+pidCon.sendData("data")
 with picamera.PiCamera() as camera:
     pool = [ImageProcessor(camWidth, camHeight, 15) for i in range(4)]
     camera.resolution = (camWidth, camHeight)
@@ -205,6 +253,7 @@ with picamera.PiCamera() as camera:
     camera.capture_sequence(streams(), 'rgb', use_video_port=True)
 
 # Shut down the processors in an orderly fashion
+print("shutting down program")
 while pool:
     with lock:
         processor = pool.pop()
