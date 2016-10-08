@@ -6,7 +6,8 @@ import picamera.array
 from PIL import Image
 import numpy as np
 import struct
-import serial
+from PIDController import PIDController
+
 
 # - - - - - - - - - - - - - - - - - -
 # Create a pool of image processors
@@ -14,8 +15,8 @@ import serial
 done = False
 lock = threading.Lock()
 pool = []
-camWidth = 96
-camHeight = 128
+camWidth = 96 #96
+camHeight = 128 #128
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
@@ -81,7 +82,7 @@ class ImageProcessor(threading.Thread):
         # The stream starts in the top left corner of the image. 
         _x = 0
         _y = 0
-        while(_y + 2*self.spacer < self.height):
+        while(_y + self.spacer < self.height):
             while(_x < self.width):
                 self.grid.append(self.streamOffset + 3*(_y*self.width + _x))
                 self.indexMapX.append(_x)
@@ -113,6 +114,7 @@ class ImageProcessor(threading.Thread):
                 print("y: ", self.objPosY)
                 print("z: ", self.objPosZ)
                 pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
+                break
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
@@ -188,56 +190,18 @@ def streams():
                 processor.event.set()
             else:
                 # When the pool is starved, wait a while for it to refill
+                print("pool is starved")
                 time.sleep(0.02)
         except KeyboardInterrupt:
             print ("Ctrl-c pressed ...")
             done = True
 
-# - - - - - - - - - - - - - - - - - -
-# - - - - - PIDController - - - - - - 
-# - - - - - - - - - - - - - - - - - -
-class PIDController():
-    def __init__(self):
-        self.port = serial.Serial("/dev/ttyAMA0", baudrate=115200, timeout=3.0)
-        self.oldcoords = [0,0,0] 
-        self.movingDown = False
-        self.waitFlag = False
-        self.waitCounter = 0
-
-    # - - - - - - - - - - - - - - - - - -
-    # - - - - - - - Update  - - - - - - - 
-    # - - - - - - - - - - - - - - - - - -
-    def update(self, x, y, z):
-        if self.oldcoords[1] < y:
-            self.movingDown = True
-        else:
-            self.movingDown = False
-
-        if self.waitFlag:
-            self.waitCounter += 1
-        if self.waitCounter >= 30:
-            self.waitFlag = False
-            self.waitCounter = 0
-
-        if y > 40 and not self.waitFlag:
-            self.waitFlag = True
-            self.sendData("data")
-
-        self.oldcoords = [x, y, z]
-    # - - - - - - - - - - - - - - - - - -
-    # - - - - - - Send Data - - - - - - - 
-    # - - - - - - - - - - - - - - - - - -
-    def sendData(self, data):
-        print("will attempt to send some data")
-        #self.port.flushInput()
-        self.port.write(b"\r\nG17 G20 G90 G94 G54 G0\r\nX1.1 Y1.1 Z1.1\r\nX0 Y0 Z0\r\n")
-
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - - Main Program  - - - - - - 
 # - - - - - - - - - - - - - - - - - -
-pidCon = PIDController()
-pidCon.sendData("data")
+pidCon = PIDController(camWidth, camHeight)
+pidCon.sendData()
 with picamera.PiCamera() as camera:
     pool = [ImageProcessor(camWidth, camHeight, 15) for i in range(4)]
     camera.resolution = (camWidth, camHeight)
