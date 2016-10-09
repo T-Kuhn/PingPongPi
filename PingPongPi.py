@@ -32,7 +32,7 @@ class ImageProcessor(threading.Thread):
         self.spacer = spcr
         self.streamOffset = 1
         self.centerStreamIndex = 0
-        self.threshold = 75
+        self.threshold = 50
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
@@ -81,7 +81,7 @@ class ImageProcessor(threading.Thread):
         # rgb-Stream: 0,0,0 ,0,0,0, 0,0,0, ... 
         # The stream starts in the top left corner of the image. 
         _x = 0
-        _y = 0
+        _y = 2*self.spacer # start at 2* spacer because the ball won't be seen fully otherwhise
         while(_y + self.spacer < self.height):
             while(_x < self.width):
                 self.grid.append(self.streamOffset + 3*(_y*self.width + _x))
@@ -109,12 +109,20 @@ class ImageProcessor(threading.Thread):
                 self.cenHori()
                 self.cenVeri()
                 self.cenHori()
+                self.shiftCenter()
                 print("found something at:")
                 print("x: ", self.objPosX)
                 print("y: ", self.objPosY)
                 print("z: ", self.objPosZ)
                 pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
                 break
+
+    # - - - - - - - - - - - - - - - - - -
+    # - - - - - Shift Center  - - - - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def shiftCenter(self):
+        self.objPosX = self.objPosX - round(self.width/2)
+        self.objPosZ = self.objPosZ - 23.0
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 

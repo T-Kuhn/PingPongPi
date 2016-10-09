@@ -14,20 +14,20 @@ class PIDController():
         self.height = h
         self.xCor = 0
         self.zCor = 0
-        self.upVal = 1.0
+        self.upVal = 0.9
 
     # - - - - - - - - - - - - - - - - - -
     # - - - - - - - Update  - - - - - - - 
     # - - - - - - - - - - - - - - - - - -
     def update(self, x, y, z):
-        if self.oldCoords[3][1] < y:
+        if self.oldCoords[0][1] < y:
             self.movingDown = True
         else:
             self.movingDown = False
 
         if self.waitFlag:
             self.waitCounter += 1
-        if self.waitCounter >= 12:
+        if self.waitCounter >= 15:
             self.waitFlag = False
             self.waitCounter = 0
 
@@ -35,7 +35,7 @@ class PIDController():
         self.oldCoords.pop(0)           # pop first entry
         self.oldCoords.append([x,y,z])  # append to the end
 
-        if y > 40 and self.movingDown and not self.waitFlag:
+        if y > 35 and self.movingDown and not self.waitFlag:
             self.waitFlag = True
             self.updatePID()
             self.sendData()
@@ -48,19 +48,16 @@ class PIDController():
     def updatePID(self):
         # X Axis
         # P
-        _x = self.oldCoords[3][0] - round(self.width/2)
-        _xP = _x/300.0;
+        _xP = self.oldCoords[3][0]/300.0;
         print("_xP: ", _xP)
-        _xD = (self.oldCoords[0][0] - self.oldCoords[3][0])/300.0
+        _xD = (self.oldCoords[3][0] - self.oldCoords[0][0])/300.0
         print("_xD: ", _xD)
 
         self.xCor = round(_xP + _xD, 3)
 
-        _z = self.oldCoords[3][2] - 20.0
-
-        _zP = _z / 50.0
+        _zP = self.oldCoords[3][2] / 40.0
         print("_zP: ", _zP)
-        _zD = (self.oldCoords[2][2] - self.oldCoords[3][2])/50.0
+        _zD = 0 #(self.oldCoords[3][2] - self.oldCoords[2][2])/30.0
         print("_zD: ", _zD)
 
         self.zCor = round(_zP + _zD, 3)
