@@ -17,6 +17,7 @@ lock = threading.Lock()
 pool = []
 camWidth = 96 #96
 camHeight = 128 #128
+counter = 0
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
@@ -97,6 +98,7 @@ class ImageProcessor(threading.Thread):
     # - - - - - GridScan Method - - - - - 
     # - - - - - - - - - - - - - - - - - -
     def gridScan(self):
+        global counter
         for index, entry in enumerate(self.grid):
             self.stream.seek(entry)
             if struct.unpack('B', self.stream.read(1))[0] > self.threshold:
@@ -115,6 +117,8 @@ class ImageProcessor(threading.Thread):
                 print("y: ", self.objPosY)
                 print("z: ", self.objPosZ)
                 pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
+                counter += 1
+                print ("counter: ", counter)
                 break
 
     # - - - - - - - - - - - - - - - - - -
