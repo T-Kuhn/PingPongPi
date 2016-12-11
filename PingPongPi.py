@@ -15,8 +15,8 @@ from PIDController import PIDController
 done = False
 lock = threading.Lock()
 pool = []
-camWidth = 96 #96
-camHeight = 128 #128
+camWidth = 128 #96
+camHeight = 256 #128
 counter = 0
 
 # - - - - - - - - - - - - - - - - - -
@@ -33,7 +33,7 @@ class ImageProcessor(threading.Thread):
         self.spacer = spcr
         self.streamOffset = 1
         self.centerStreamIndex = 0
-        self.threshold = 50
+        self.threshold = 60
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
@@ -98,6 +98,7 @@ class ImageProcessor(threading.Thread):
     # - - - - - GridScan Method - - - - - 
     # - - - - - - - - - - - - - - - - - -
     def gridScan(self):
+        foundSomething = False
         global counter
         for index, entry in enumerate(self.grid):
             self.stream.seek(entry)
@@ -105,9 +106,9 @@ class ImageProcessor(threading.Thread):
                 self.objPosX = self.indexMapX[index]
                 self.objPosY = self.indexMapY[index]
                 self.centerStreamIndex = entry
-                # print("x: ", self.objPosX)
-                # print("y: ", self.objPosY)
-                # print("start closer examination")
+                #print("x: ", self.objPosX)
+                #print("y: ", self.objPosY)
+                #print("start closer examination")
                 self.cenHori()
                 self.cenVeri()
                 self.cenHori()
@@ -118,15 +119,18 @@ class ImageProcessor(threading.Thread):
                 print("z: ", self.objPosZ)
                 pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
                 counter += 1
-                print ("counter: ", counter)
+                #print ("counter: ", counter)
+                foundSomething = True
                 break
+        if foundSomething is False:
+            print("found nothing")
 
     # - - - - - - - - - - - - - - - - - -
     # - - - - - Shift Center  - - - - - - 
     # - - - - - - - - - - - - - - - - - -
     def shiftCenter(self):
         self.objPosX = self.objPosX - round(self.width/2)
-        self.objPosZ = self.objPosZ - 23.0
+        self.objPosZ = self.objPosZ - 43.0
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
@@ -184,6 +188,11 @@ class ImageProcessor(threading.Thread):
             # print("new y: ", self.objPosY)
         except:
             pass
+    # - - - - - - - - - - - - - - - - - -
+    # - - - get time in Millisecs - - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def getTimeInMilliSecs(self):
+        return int(time.time()*1000)
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
@@ -215,7 +224,7 @@ def streams():
 pidCon = PIDController(camWidth, camHeight)
 pidCon.sendData()
 with picamera.PiCamera() as camera:
-    pool = [ImageProcessor(camWidth, camHeight, 15) for i in range(4)]
+    pool = [ImageProcessor(camWidth, camHeight, 25) for i in range(4)]
     camera.resolution = (camWidth, camHeight)
     camera.framerate = 90
     time.sleep(2)

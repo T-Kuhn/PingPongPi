@@ -47,8 +47,9 @@ class ImageProcessor(threading.Thread):
                     counterThing += 1
                     if counterThing < 10:
                         print ("taking an image")
+                        img.save("out" + str(counterThing) + ".bmp")
                     else:
-                        img.save("out.bmp")
+                        img.save("outLast.bmp")
                         done = True
                     #...
                     #...
@@ -86,7 +87,7 @@ def streams():
 # - - - - - - - - - - - - - - - - - -
 with picamera.PiCamera() as camera:
     pool = [ImageProcessor() for i in range(4)]
-    camera.resolution = (96, 128)
+    camera.resolution = (196, 256)  #96, 128
     camera.framerate = 90
     time.sleep(2)
     # Now fix the values
