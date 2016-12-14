@@ -53,9 +53,9 @@ class PIDController():
     def updatePID(self):
         # X Axis
         # P
-        _xP = self.oldCoords[3][0]/150.0;  #500
+        _xP = self.oldCoords[3][0]/180.0;  #500
         print("_xP: ", _xP)
-        _xD = (self.oldCoords[3][0] - self.oldCoords[2][0])/200.0 #500
+        _xD = (self.oldCoords[3][0] - self.oldCoords[2][0])/150.0 #500
         print("_xD: ", _xD)
 
         self.xCor = round(_xP + _xD, 3)

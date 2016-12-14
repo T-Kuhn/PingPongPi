@@ -13,6 +13,7 @@ import struct
 done = False
 lock = threading.Lock()
 pool = []
+counterThing = 0
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
@@ -20,36 +21,39 @@ pool = []
 class ImageProcessor(threading.Thread):
     def __init__(self):
         super(ImageProcessor, self).__init__()
-        self.stream = io.BytesIO()
+        self.streams = [io.BytesIO() for i in range(10)]
         self.event = threading.Event()
         self.terminated = False
         self.start()
+        self.streamIndex = 0
+        self.imgNmbr = []
 
     def run(self):
         # This method runs in a separate thread
         global done
-        counterThing = 0
+        global counterThing
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
                 try:
-                    self.stream.seek(0)
+                    self.streams[self.streamIndex].seek(0)
                     # Read the image and do some processing on it
-                    img = Image.open(self.stream)
                     
-                    # - - - - - - - - - - - - - - - - - -
-                    # - - - - -  experimental - - - - - - 
-                    # - - - - - - - - - - - - - - - - - -
+                    
                     #self.stream.seek(1)
                     #print(struct.unpack('B', self.stream.read(1))[0])
                     
                     
                     counterThing += 1
-                    if counterThing < 10:
+                    tmp = counterThing
+                    self.imgNmbr.append(tmp)
+                    if tmp < 10:
                         print ("taking an image")
-                        img.save("out" + str(counterThing) + ".bmp")
+                        print (tmp)
+                    
                     else:
-                        img.save("outLast.bmp")
+                        
+                        #img.save("outLast.bmp")
                         done = True
                     #...
                     #...
@@ -58,8 +62,9 @@ class ImageProcessor(threading.Thread):
                     #done=True
                 finally:
                     # Reset the stream and event
-                    self.stream.seek(0)
-                    self.stream.truncate()
+                    self.streams[self.streamIndex].seek(0)
+                    #self.streams[self.streamIndex].truncate()
+                    self.streamIndex += 1
                     self.event.clear()
                     # Return ourselves to the pool
                     with lock:
@@ -68,6 +73,8 @@ class ImageProcessor(threading.Thread):
 # - - - - - - - - - - - - - - - - - -
 # - - - - Streams Function  - - - - - 
 # - - - - - - - - - - - - - - - - - -
+# This function hands the capture sequence function streams down in which
+# it can put the pixeldata
 def streams():
     while not done:
         with lock:
@@ -76,11 +83,12 @@ def streams():
             else:
                 processor = None
         if processor:
-            yield processor.stream
+            yield processor.streams[processor.streamIndex]
             processor.event.set()
         else:
             # When the pool is starved, wait a while for it to refill
             time.sleep(0.02)
+            print("starved!")
 
 # - - - - - - - - - - - - - - - - - -
 # - - - - - Main Program  - - - - - - 
@@ -100,9 +108,35 @@ with picamera.PiCamera() as camera:
     camera.capture_sequence(streams(), use_video_port=True)
     #camera.capture_sequence(streams(), 'yuv', use_video_port=True)
 
+# if we come this far "done" was set to true!
+
+
+
 # Shut down the processors in an orderly fashion
 while pool:
     with lock:
         processor = pool.pop()
+    for index, nmbr in enumerate(processor.imgNmbr):
+        try:
+            img = Image.open(processor.streams[index])
+            img.save("out" + str(nmbr) + ".bmp")
+        except:
+            print("couldn't do it")
     processor.terminated = True
     processor.join()
+
+
+
+# - - - - - - - - - - - - - - - - - -
+# - - - - - - - MEMO  - - - - - - - - 
+# - - - - - - - - - - - - - - - - - -
+
+# I am pretty sure the counterThing can be used as is.
+# we need to set up a streams array. 
+
+
+
+
+
+
+
