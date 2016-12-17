@@ -21,7 +21,7 @@ counterThing = 0
 class ImageProcessor(threading.Thread):
     def __init__(self):
         super(ImageProcessor, self).__init__()
-        self.streams = [io.BytesIO() for i in range(10)]
+        self.streams = [io.BytesIO() for i in range(200)]
         self.event = threading.Event()
         self.terminated = False
         self.start()
@@ -47,7 +47,7 @@ class ImageProcessor(threading.Thread):
                     counterThing += 1
                     tmp = counterThing
                     self.imgNmbr.append(tmp)
-                    if tmp < 10:
+                    if tmp < 180:
                         print ("taking an image")
                         print (tmp)
                     
@@ -76,6 +76,8 @@ class ImageProcessor(threading.Thread):
 # This function hands the capture sequence function streams down in which
 # it can put the pixeldata
 def streams():
+    print("start!")
+    time.sleep(0.5)
     while not done:
         with lock:
             if pool:
@@ -95,7 +97,11 @@ def streams():
 # - - - - - - - - - - - - - - - - - -
 with picamera.PiCamera() as camera:
     pool = [ImageProcessor() for i in range(4)]
-    camera.resolution = (196, 256)  #96, 128
+    print("pool is set up")
+    print("wait for some seconds for mem check")
+    time.sleep(12)
+    print("wait finished")
+    camera.resolution = (320, 480)  #196, 256
     camera.framerate = 90
     time.sleep(2)
     # Now fix the values

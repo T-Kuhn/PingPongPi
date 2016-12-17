@@ -46,7 +46,6 @@ class PIDController():
             self.sendData()
 
 
-
     # - - - - - - - - - - - - - - - - - -
     # - - - - - - Update PID  - - - - - - 
     # - - - - - - - - - - - - - - - - - -
@@ -82,4 +81,4 @@ class PIDController():
         #self.port.write(downStr.encode())
         self.port.write(upStr.encode())
         self.port.write(downHoriStr.encode())
-        
+

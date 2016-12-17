@@ -130,7 +130,7 @@ class ImageProcessor(threading.Thread):
     # - - - - - - - - - - - - - - - - - -
     def shiftCenter(self):
         self.objPosX = self.objPosX - round(self.width/2)
-        self.objPosZ = self.objPosZ - 43.0
+        self.objPosZ = self.objPosZ - 43.0 #43
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
