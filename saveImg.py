@@ -13,7 +13,7 @@ import struct
 done = False
 lock = threading.Lock()
 pool = []
-counterThing = 0
+globalPicCounter = 0
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
@@ -21,7 +21,8 @@ counterThing = 0
 class ImageProcessor(threading.Thread):
     def __init__(self):
         super(ImageProcessor, self).__init__()
-        self.streams = [io.BytesIO() for i in range(200)]
+        self.picNmbrMax = 20
+        self.streams = [io.BytesIO() for i in range(0, self.picNmbrMax)]
         self.event = threading.Event()
         self.terminated = False
         self.start()
@@ -31,41 +32,30 @@ class ImageProcessor(threading.Thread):
     def run(self):
         # This method runs in a separate thread
         global done
-        global counterThing
+        global globalPicCounter
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
                 try:
                     self.streams[self.streamIndex].seek(0)
-                    # Read the image and do some processing on it
                     
-                    
-                    #self.stream.seek(1)
-                    #print(struct.unpack('B', self.stream.read(1))[0])
-                    
-                    
-                    counterThing += 1
-                    tmp = counterThing
+                    globalPicCounter += 1
+                    tmp = globalPicCounter
                     self.imgNmbr.append(tmp)
-                    if tmp < 180:
-                        print ("taking an image")
-                        print (tmp)
-                    
-                    else:
-                        
-                        #img.save("outLast.bmp")
-                        done = True
-                    #...
-                    #...
-                    # Set done to True if you want the script to terminate
-                    # at some point
-                    #done=True
+                    print ("taking an image")
+                    print (tmp)
                 finally:
                     # Reset the stream and event
                     self.streams[self.streamIndex].seek(0)
                     #self.streams[self.streamIndex].truncate()
+
                     self.streamIndex += 1
+                    if self.streamIndex >= self.picNmbrMax:
+                        # Set done to True if you want the script to terminate
+                        done = True
+
                     self.event.clear()
+
                     # Return ourselves to the pool
                     with lock:
                         pool.append(self)
@@ -97,11 +87,7 @@ def streams():
 # - - - - - - - - - - - - - - - - - -
 with picamera.PiCamera() as camera:
     pool = [ImageProcessor() for i in range(4)]
-    print("pool is set up")
-    print("wait for some seconds for mem check")
-    time.sleep(12)
-    print("wait finished")
-    camera.resolution = (320, 480)  #196, 256
+    camera.resolution = (128, 256)  #196, 256
     camera.framerate = 90
     time.sleep(2)
     # Now fix the values
@@ -115,9 +101,6 @@ with picamera.PiCamera() as camera:
     #camera.capture_sequence(streams(), 'yuv', use_video_port=True)
 
 # if we come this far "done" was set to true!
-
-
-
 # Shut down the processors in an orderly fashion
 while pool:
     with lock:
@@ -137,8 +120,14 @@ while pool:
 # - - - - - - - MEMO  - - - - - - - - 
 # - - - - - - - - - - - - - - - - - -
 
-# I am pretty sure the counterThing can be used as is.
-# we need to set up a streams array. 
+# What is the next step.
+# I mean really, what does it look like?
+# I think I really want to program a debug function for the ball position determination
+# algorithm.
+# We are able to get a lot of 90fps pics and save them after recording.
+# we just need to add some functionality (the drawing of the ball position point)
+# and then, in the end, we should try to implement this thing into the PingPongPi file.
+
 
 
 
