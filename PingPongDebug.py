@@ -7,6 +7,7 @@ from PIL import Image
 import numpy as np
 import struct
 from PIDController import PIDController
+from RGBStreamToNumpyArr import RGBStreamToNumpyArr
 
 
 # - - - - - - - - - - - - - - - - - -
@@ -15,9 +16,9 @@ from PIDController import PIDController
 done = False
 lock = threading.Lock()
 pool = []
-camWidth = 128 #96
+camWidth = 192 #96
 camHeight = 256 #128
-counter = 0
+globalPicCounter = 0
 
 # - - - - - - - - - - - - - - - - - -
 # - - - Image Processor Class - - - - 
@@ -25,6 +26,10 @@ counter = 0
 class ImageProcessor(threading.Thread):
     def __init__(self, w, h, spcr):
         super(ImageProcessor, self).__init__()
+        self.picNmbrMax = 20
+        self.streamIndex = 0
+        self.imgNmbr = []
+        self.streams = [io.BytesIO() for i in range(0, self.picNmbrMax)]
         self.width = w
         self.height = h
         self.objPosX = 0
@@ -41,7 +46,6 @@ class ImageProcessor(threading.Thread):
         print("width: ", self.width)
         print("height: ", self.height)
         print("spacer: ", self.spacer)
-        self.stream = io.BytesIO()
         self.event = threading.Event()
         self.terminated = False
         self.start()
@@ -52,16 +56,26 @@ class ImageProcessor(threading.Thread):
     def run(self):
         # This method runs in a separate thread
         global done
+        global globalPicCounter
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
                 try:
-                    self.stream.seek(0)
+                    self.streams[self.streamIndex].seek(0)
+
+                    globalPicCounter += 1
+                    tmp = globalPicCounter
+                    self.imgNmbr.append(tmp)
+
                     self.gridScan()
                 finally:
                     # Reset the stream and event
-                    self.stream.seek(0)
-                    self.stream.truncate()
+                    self.streams[self.streamIndex].seek(0)
+                    #self.streams[self.streamIndex].truncate()
+                    self.streamIndex += 1
+                    if self.streamIndex >= self.picNmbrMax:
+                        # Set done to True if you want the script to terminate
+                        done = True
                     self.event.clear()
                     # Return ourselves to the pool
                     with lock:
@@ -99,10 +113,9 @@ class ImageProcessor(threading.Thread):
     # - - - - - - - - - - - - - - - - - -
     def gridScan(self):
         foundSomething = False
-        global counter
         for index, entry in enumerate(self.grid):
-            self.stream.seek(entry)
-            if struct.unpack('B', self.stream.read(1))[0] > self.threshold:
+            self.streams[self.streamIndex].seek(entry)
+            if struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold:
                 self.objPosX = self.indexMapX[index]
                 self.objPosY = self.indexMapY[index]
                 self.centerStreamIndex = entry
@@ -118,8 +131,6 @@ class ImageProcessor(threading.Thread):
                 print("y: ", self.objPosY)
                 print("z: ", self.objPosZ)
                 pidCon.update(self.objPosX, self.objPosY, self.objPosZ)
-                counter += 1
-                #print ("counter: ", counter)
                 foundSomething = True
                 break
         if foundSomething is False:
@@ -140,16 +151,16 @@ class ImageProcessor(threading.Thread):
         stepsRight = 0
         try:
             # see how far we can go to the left
-            self.stream.seek(self.centerStreamIndex)
-            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
                 stepsLeft -= 1 
-                self.stream.seek(self.centerStreamIndex + stepsLeft*3)
+                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsLeft*3)
             # print("stepsLeft: ", stepsLeft)
             # see how far we can go to the right
-            self.stream.seek(self.centerStreamIndex)
-            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
                 stepsRight += 1 
-                self.stream.seek(self.centerStreamIndex + stepsRight*3)
+                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsRight*3)
             # print("stepsRight: ", stepsRight)
             # calculate the new center
             centerCor = round((stepsLeft + stepsRight)/2) 
@@ -170,16 +181,16 @@ class ImageProcessor(threading.Thread):
         stepsDown = 0
         try:
             # see how far we can go Up 
-            self.stream.seek(self.centerStreamIndex)
-            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
                 stepsUp -= 1 
-                self.stream.seek(self.centerStreamIndex + stepsUp*3*self.width)
+                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsUp*3*self.width)
             # print("stepsUp: ", stepsUp)
             # see how far we can go Down 
-            self.stream.seek(self.centerStreamIndex)
-            while(struct.unpack('B', self.stream.read(1))[0] > self.threshold):
+            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
                 stepsDown += 1 
-                self.stream.seek(self.centerStreamIndex + stepsDown*3*self.width)
+                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsDown*3*self.width)
             # print("stepsDown: ", stepsDown)
             # calculate the new center
             centerCor = round((stepsUp + stepsDown)/2) 
@@ -207,7 +218,7 @@ def streams():
                 else:
                     processor = None
             if processor:
-                yield processor.stream
+                yield processor.streams[processor.streamIndex]
                 processor.event.set()
             else:
                 # When the pool is starved, wait a while for it to refill
@@ -237,10 +248,24 @@ with picamera.PiCamera() as camera:
     camera.awb_gains = g
     camera.capture_sequence(streams(), 'rgb', use_video_port=True)
 
-# Shut down the processors in an orderly fashion
+# - - - - - - - - - - - - - - - - - -
+# - - - Shut down the processors  - - 
+# - - - - - - - - - - - - - - - - - -
 print("shutting down program")
 while pool:
+    # get all the processors, one at a time
     with lock:
         processor = pool.pop()
+    # save all the pixeldata to the "harddisc"
+    for index, nmbr in enumerate(processor.imgNmbr):
+        try:
+            processor.streams[index].seek(0)
+            tmp = np.fromstring(processor.streams[index].getvalue(), dtype=np.uint8)
+            tmp.shape = camHeight, camWidth, 3
+            img = Image.fromarray(tmp)
+            img.save("out" + str(nmbr) + ".bmp")
+        except:
+            print("couldn't do it")
+    # shut it down
     processor.terminated = True
     processor.join()
