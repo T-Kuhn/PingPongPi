@@ -7,7 +7,6 @@ from PIL import Image
 import numpy as np
 import struct
 from PIDController import PIDController
-from RGBStreamToNumpyArr import RGBStreamToNumpyArr
 
 
 # - - - - - - - - - - - - - - - - - -
@@ -26,7 +25,7 @@ globalPicCounter = 0
 class ImageProcessor(threading.Thread):
     def __init__(self, w, h, spcr):
         super(ImageProcessor, self).__init__()
-        self.picNmbrMax = 20
+        self.picNmbrMax = 500
         self.streamIndex = 0
         self.imgNmbr = []
         self.streams = [io.BytesIO() for i in range(0, self.picNmbrMax)]
@@ -38,11 +37,13 @@ class ImageProcessor(threading.Thread):
         self.spacer = spcr
         self.streamOffset = 1
         self.centerStreamIndex = 0
-        self.threshold = 60
+        self.threshold = 40
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
         self.makeGrid()
+        self.showGridBoolean = True 
+        self.showCenteringBoolean = True
         print("width: ", self.width)
         print("height: ", self.height)
         print("spacer: ", self.spacer)
@@ -62,12 +63,12 @@ class ImageProcessor(threading.Thread):
             if self.event.wait(1):
                 try:
                     self.streams[self.streamIndex].seek(0)
-
                     globalPicCounter += 1
                     tmp = globalPicCounter
                     self.imgNmbr.append(tmp)
-
                     self.gridScan()
+                    if self.showGridBoolean:
+                        self.showGrid()
                 finally:
                     # Reset the stream and event
                     self.streams[self.streamIndex].seek(0)
@@ -122,9 +123,9 @@ class ImageProcessor(threading.Thread):
                 #print("x: ", self.objPosX)
                 #print("y: ", self.objPosY)
                 #print("start closer examination")
-                self.cenHori()
-                self.cenVeri()
-                self.cenHori()
+                self.cenHori(False)
+                self.cenVeri(self.showCenteringBoolean)
+                self.cenHori(self.showCenteringBoolean)
                 self.shiftCenter()
                 print("found something at:")
                 print("x: ", self.objPosX)
@@ -137,6 +138,30 @@ class ImageProcessor(threading.Thread):
             print("found nothing")
 
     # - - - - - - - - - - - - - - - - - -
+    # - - - - - showGrid Method - - - - - 
+    # - - - - - - - - - - - - - - - - - -
+    def showGrid(self):
+        for index, entry in enumerate(self.grid):
+            self.streams[self.streamIndex].seek(entry)
+            self.streams[self.streamIndex].write(b'\xAF')  # set green pixel
+            self.streams[self.streamIndex].seek(entry - self.streamOffset)
+            self.streams[self.streamIndex].write(b'\xFF')  # set red pixel
+            #self.streams[self.streamIndex].seek(entry - self.streamOffset + 2)
+            #self.streams[self.streamIndex].write(b'\xAF')  # set blue pixel
+
+    # - - - - - - - - - - - - - - - - - -
+    # - - color Current Pixel Method  - - 
+    # - - - - - - - - - - - - - - - - - -
+    def colorCurrentPixel(self, entry):
+        #self.streams[self.streamIndex].write(b'\xAF')  # set green pixel
+        self.streams[self.streamIndex].seek(entry - self.streamOffset)
+        self.streams[self.streamIndex].write(b'\xFF')  # set red pixel
+        #self.streams[self.streamIndex].seek(entry - self.streamOffset + 2)
+        #self.streams[self.streamIndex].write(b'\xAF')  # set blue pixel
+        #reset entry position
+        #self.streams[self.streamIndex].seek(entry - self.streamOffset)
+
+    # - - - - - - - - - - - - - - - - - -
     # - - - - - Shift Center  - - - - - - 
     # - - - - - - - - - - - - - - - - - -
     def shiftCenter(self):
@@ -146,21 +171,29 @@ class ImageProcessor(threading.Thread):
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 
     # - - - - - - - - - - - - - - - - - -
-    def cenHori(self):
+    def cenHori(self, debugFlag):
         stepsLeft = 0
         stepsRight = 0
         try:
             # see how far we can go to the left
-            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            streamPos = self.centerStreamIndex
+            self.streams[self.streamIndex].seek(streamPos)
             while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
+                if debugFlag:
+                    self.colorCurrentPixel(streamPos)
                 stepsLeft -= 1 
-                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsLeft*3)
+                streamPos = self.centerStreamIndex + stepsLeft*3
+                self.streams[self.streamIndex].seek(streamPos)
             # print("stepsLeft: ", stepsLeft)
             # see how far we can go to the right
-            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            streamPos = self.centerStreamIndex
+            self.streams[self.streamIndex].seek(streamPos)
             while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
+                if debugFlag:
+                    self.colorCurrentPixel(streamPos)
                 stepsRight += 1 
-                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsRight*3)
+                streamPos = self.centerStreamIndex + stepsRight*3
+                self.streams[self.streamIndex].seek(streamPos)
             # print("stepsRight: ", stepsRight)
             # calculate the new center
             centerCor = round((stepsLeft + stepsRight)/2) 
@@ -171,26 +204,35 @@ class ImageProcessor(threading.Thread):
             # calculate Z axis:
             self.objPosZ = stepsRight - stepsLeft
         except:
+            print("something went wrong")
             pass
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Vertical Method - - - 
     # - - - - - - - - - - - - - - - - - -
-    def cenVeri(self):
+    def cenVeri(self, debugFlag):
         stepsUp = 0
         stepsDown = 0
         try:
             # see how far we can go Up 
-            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            streamPos = self.centerStreamIndex
+            self.streams[self.streamIndex].seek(streamPos)
             while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
+                if debugFlag:
+                    self.colorCurrentPixel(streamPos)
                 stepsUp -= 1 
-                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsUp*3*self.width)
+                streamPos = self.centerStreamIndex + stepsUp*3*self.width
+                self.streams[self.streamIndex].seek(streamPos)
             # print("stepsUp: ", stepsUp)
             # see how far we can go Down 
-            self.streams[self.streamIndex].seek(self.centerStreamIndex)
+            streamPos = self.centerStreamIndex
+            self.streams[self.streamIndex].seek(streamPos)
             while(struct.unpack('B', self.streams[self.streamIndex].read(1))[0] > self.threshold):
+                if debugFlag:
+                    self.colorCurrentPixel(streamPos)
                 stepsDown += 1 
-                self.streams[self.streamIndex].seek(self.centerStreamIndex + stepsDown*3*self.width)
+                streamPos = self.centerStreamIndex + stepsDown*3*self.width
+                self.streams[self.streamIndex].seek(streamPos)
             # print("stepsDown: ", stepsDown)
             # calculate the new center
             centerCor = round((stepsUp + stepsDown)/2) 
@@ -198,6 +240,7 @@ class ImageProcessor(threading.Thread):
             self.centerStreamIndex += centerCor*3*self.width
             # print("new y: ", self.objPosY)
         except:
+            print("something went wrong")
             pass
     # - - - - - - - - - - - - - - - - - -
     # - - - get time in Millisecs - - - - 
@@ -223,7 +266,7 @@ def streams():
             else:
                 # When the pool is starved, wait a while for it to refill
                 print("pool is starved")
-                time.sleep(0.02)
+                time.sleep(0.01)
         except KeyboardInterrupt:
             print ("Ctrl-c pressed ...")
             done = True
