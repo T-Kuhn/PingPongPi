@@ -33,7 +33,7 @@ class ImageProcessor(threading.Thread):
         self.spacer = spcr
         self.streamOffset = 1
         self.centerStreamIndex = 0
-        self.threshold = 60
+        self.threshold = 30
         # stremOffset = 0 --> use red light
         # stremOffset = 1--> use green light
         # stremOffset = 2 --> use blue light
@@ -130,7 +130,7 @@ class ImageProcessor(threading.Thread):
     # - - - - - - - - - - - - - - - - - -
     def shiftCenter(self):
         self.objPosX = self.objPosX - round(self.width/2)
-        self.objPosZ = self.objPosZ - 43.0 #43
+        self.objPosZ = self.objPosZ - 48.0 #43
 
     # - - - - - - - - - - - - - - - - - -
     # - - Centering Horizontal Method - - 

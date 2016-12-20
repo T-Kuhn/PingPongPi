@@ -43,7 +43,7 @@ class PIDController():
 
             self.waitFlag = True
             self.updatePID()
-            #self.sendData()
+            self.sendData()
 
 
     # - - - - - - - - - - - - - - - - - -
